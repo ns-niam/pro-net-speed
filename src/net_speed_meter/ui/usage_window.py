@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from net_speed_meter.services.data_formatter import format_data
+from net_speed_meter.services.data_formatter import format_data_size
 from net_speed_meter.services.usage_repository import (
     DailyUsage,
     UsageRepository,
@@ -114,17 +114,17 @@ class UsageWindow(QDialog):
         )
 
         self._total_label.setText(
-            f"Total: {format_data(monthly_usage.total_bytes)}",
+            f"Total: {format_data_size(monthly_usage.total_bytes)}",
         )
 
         self._download_label.setText(
-            f"Download: "
-            f"{format_data(monthly_usage.download_bytes)}",
+            "Download: "
+            f"{format_data_size(monthly_usage.download_bytes)}",
         )
 
         self._upload_label.setText(
-            f"Upload: "
-            f"{format_data(monthly_usage.upload_bytes)}",
+            "Upload: "
+            f"{format_data_size(monthly_usage.upload_bytes)}",
         )
 
         self._populate_table(history)
@@ -140,9 +140,9 @@ class UsageWindow(QDialog):
         for row_index, usage in enumerate(history):
             values = [
                 usage.date,
-                format_data(usage.download_bytes),
-                format_data(usage.upload_bytes),
-                format_data(usage.total_bytes),
+                format_data_size(usage.download_bytes),
+                format_data_size(usage.upload_bytes),
+                format_data_size(usage.total_bytes),
             ]
 
             for column_index, value in enumerate(values):
@@ -151,3 +151,8 @@ class UsageWindow(QDialog):
                     column_index,
                     QTableWidgetItem(value),
                 )
+
+    def refresh(self) -> None:
+        """Refresh the displayed usage data."""
+
+        self._load_usage()
