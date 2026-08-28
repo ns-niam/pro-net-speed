@@ -32,7 +32,7 @@ class SpeedWidget(QWidget):
 
         self.setWindowTitle("Net Speed Meter")
         self.setWindowFlags(self._get_window_flags())
-        self.setFixedSize(180, 72)
+        self.setFixedSize(140, 52)
 
         self.setWindowOpacity(self._settings.opacity)
         self.move(self._settings.x, self._settings.y)
@@ -65,15 +65,15 @@ class SpeedWidget(QWidget):
 
             QLabel {
                 color: white;
-                font-size: 16px;
+                font-size: 13px;
                 font-weight: 600;
             }
             """
         )
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 10, 16, 10)
-        layout.setSpacing(4)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(0)
 
         self.download_label = QLabel("↓ 0 B/s")
         self.upload_label = QLabel("↑ 0 B/s")
@@ -203,3 +203,26 @@ class SpeedWidget(QWidget):
             return
 
         super().mouseReleaseEvent(event)
+
+    def wheelEvent(self, event) -> None:
+        """Adjust widget opacity with the mouse wheel."""
+
+        delta = event.angleDelta().y()
+
+        if delta == 0:
+            event.ignore()
+            return
+
+        step = 0.05 if delta > 0 else -0.05
+
+        new_opacity = max(
+            0.3,
+            min(1.0, self._settings.opacity + step),
+    )
+
+        self._settings.opacity = round(new_opacity, 2)
+        self.setWindowOpacity(self._settings.opacity)
+
+        self._settings_manager.save(self._settings)
+
+        event.accept()    
