@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt, QTimer
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import (
+    QApplication,
+    QLabel,
+    QMenu,
+    QVBoxLayout,
+    QWidget,
+)
 
 from net_speed_meter.core.network_monitor import NetworkMonitor
 from net_speed_meter.services.settings import AppSettings, SettingsManager
@@ -102,8 +109,56 @@ class SpeedWidget(QWidget):
         self.download_label.setText(f"↓ {download}")
         self.upload_label.setText(f"↑ {upload}")
 
+    def _show_context_menu(self, global_position: QPoint) -> None:
+        """Show the widget context menu."""
+
+        menu = QMenu(self)
+
+        settings_action = QAction("Settings", self)
+        settings_action.triggered.connect(self._open_settings)
+        menu.addAction(settings_action)
+
+        always_on_top_action = QAction("Always on Top", self)
+        always_on_top_action.setCheckable(True)
+        always_on_top_action.setChecked(
+            self._settings.always_on_top,
+        )
+        always_on_top_action.triggered.connect(
+            self._toggle_always_on_top,
+        )
+        menu.addAction(always_on_top_action)
+
+        menu.addSeparator()
+
+        exit_action = QAction("Exit", self)
+        exit_action.triggered.connect(QApplication.quit)
+        menu.addAction(exit_action)
+
+        menu.exec(global_position)
+
+    def _open_settings(self) -> None:
+        """Open the application settings."""
+
+        print("Settings window will be added next.")
+
+    def _toggle_always_on_top(self, enabled: bool) -> None:
+        """Toggle the always-on-top window setting."""
+
+        self._settings.always_on_top = enabled
+        self._settings_manager.save(self._settings)
+
+        self.setWindowFlags(self._get_window_flags())
+        self.show()
+
     def mousePressEvent(self, event) -> None:
-        """Start dragging the widget."""
+        """Handle mouse press events."""
+
+        if event.button() == Qt.MouseButton.RightButton:
+            self._show_context_menu(
+                event.globalPosition().toPoint(),
+            )
+            event.accept()
+            return
 
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_position = (
