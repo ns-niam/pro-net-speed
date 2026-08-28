@@ -21,3 +21,9 @@ def get_settings_path() -> Path:
     """Return the path used to store application settings."""
 
     return get_app_data_directory() / "settings.json"
+
+
+def get_usage_database_path() -> Path:
+    """Return the path used to store network usage data."""
+
+    return get_app_data_directory() / "usage.db"

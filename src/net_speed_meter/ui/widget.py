@@ -13,6 +13,10 @@ from PySide6.QtWidgets import (
 from net_speed_meter.core.network_monitor import NetworkMonitor
 from net_speed_meter.services.settings import AppSettings, SettingsManager
 from net_speed_meter.services.speed_formatter import format_speed
+from net_speed_meter.services.usage_repository import UsageRepository
+from net_speed_meter.services.usage_service import UsageService
+from net_speed_meter.ui.settings_window import SettingsWindow
+from net_speed_meter.ui.usage_window import UsageWindow
 
 
 class SpeedWidget(QWidget):
@@ -22,11 +26,16 @@ class SpeedWidget(QWidget):
         self,
         settings: AppSettings,
         settings_manager: SettingsManager,
+        usage_service: UsageService,
+        usage_repository: UsageRepository,
     ) -> None:
         super().__init__()
 
         self._settings = settings
         self._settings_manager = settings_manager
+        self._usage_service = usage_service
+        self._usage_repository = usage_repository
+        self._usage_window: UsageWindow | None = None
         self._monitor = NetworkMonitor()
         self._drag_position: QPoint | None = None
 
@@ -78,8 +87,12 @@ class SpeedWidget(QWidget):
         self.download_label = QLabel("↓ 0 B/s")
         self.upload_label = QLabel("↑ 0 B/s")
 
-        self.download_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.upload_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.download_label.setAlignment(
+            Qt.AlignmentFlag.AlignCenter,
+        )
+        self.upload_label.setAlignment(
+            Qt.AlignmentFlag.AlignCenter,
+        )
 
         layout.addWidget(self.download_label)
         layout.addWidget(self.upload_label)
@@ -97,6 +110,8 @@ class SpeedWidget(QWidget):
     def _update_speed(self) -> None:
         """Update the displayed network speed."""
 
+        self._usage_service.update()
+
         speed = self._monitor.get_current_speed()
 
         download = format_speed(
@@ -109,16 +124,33 @@ class SpeedWidget(QWidget):
         self.download_label.setText(f"↓ {download}")
         self.upload_label.setText(f"↑ {upload}")
 
-    def _show_context_menu(self, global_position: QPoint) -> None:
+        if self._usage_window is not None:
+            self._usage_window.refresh()
+
+    def _show_context_menu(
+        self,
+        global_position: QPoint,
+    ) -> None:
         """Show the widget context menu."""
 
         menu = QMenu(self)
 
+        usage_action = QAction("Data Usage", self)
+        usage_action.triggered.connect(
+            self._open_usage_window,
+        )
+        menu.addAction(usage_action)
+
         settings_action = QAction("Settings", self)
-        settings_action.triggered.connect(self._open_settings)
+        settings_action.triggered.connect(
+            self._open_settings,
+        )
         menu.addAction(settings_action)
 
-        always_on_top_action = QAction("Always on Top", self)
+        always_on_top_action = QAction(
+            "Always on Top",
+            self,
+        )
         always_on_top_action.setCheckable(True)
         always_on_top_action.setChecked(
             self._settings.always_on_top,
@@ -136,18 +168,60 @@ class SpeedWidget(QWidget):
 
         menu.exec(global_position)
 
+    def _open_usage_window(self) -> None:
+        """Open or focus the data usage window."""
+
+        if self._usage_window is None:
+            self._usage_window = UsageWindow(
+                repository=self._usage_repository,
+            )
+
+        self._usage_window.refresh()
+        self._usage_window.show()
+        self._usage_window.raise_()
+        self._usage_window.activateWindow()
+
     def _open_settings(self) -> None:
         """Open the application settings."""
 
-        print("Settings window will be added next.")
+        settings_window = SettingsWindow(
+            settings=self._settings,
+            settings_manager=self._settings_manager,
+            parent=self,
+        )
 
-    def _toggle_always_on_top(self, enabled: bool) -> None:
+        if settings_window.exec():
+            self._apply_settings()
+
+    def _apply_settings(self) -> None:
+        """Apply the current settings to the widget."""
+
+        self.setWindowOpacity(
+            self._settings.opacity,
+        )
+
+        self._timer.setInterval(
+            self._settings.update_interval_ms,
+        )
+
+        self.setWindowFlags(
+            self._get_window_flags(),
+        )
+
+        self.show()
+
+    def _toggle_always_on_top(
+        self,
+        enabled: bool,
+    ) -> None:
         """Toggle the always-on-top window setting."""
 
         self._settings.always_on_top = enabled
         self._settings_manager.save(self._settings)
 
-        self.setWindowFlags(self._get_window_flags())
+        self.setWindowFlags(
+            self._get_window_flags(),
+        )
         self.show()
 
     def mousePressEvent(self, event) -> None:
@@ -217,12 +291,22 @@ class SpeedWidget(QWidget):
 
         new_opacity = max(
             0.3,
-            min(1.0, self._settings.opacity + step),
-    )
+            min(
+                1.0,
+                self._settings.opacity + step,
+            ),
+        )
 
-        self._settings.opacity = round(new_opacity, 2)
-        self.setWindowOpacity(self._settings.opacity)
+        self._settings.opacity = round(
+            new_opacity,
+            2,
+        )
+        self.setWindowOpacity(
+            self._settings.opacity,
+        )
 
-        self._settings_manager.save(self._settings)
+        self._settings_manager.save(
+            self._settings,
+        )
 
-        event.accept()    
+        event.accept()
