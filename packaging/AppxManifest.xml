@@ -7,9 +7,9 @@
     IgnorableNamespaces="uap desktop">
 
     <Identity
-        Name="${PACKAGE_IDENTITY_NAME}"
-        Publisher="${PACKAGE_PUBLISHER}"
-        Version="1.0.0.0"
+        Name="__PACKAGE_IDENTITY_NAME__"
+        Publisher="__PACKAGE_PUBLISHER__"
+        Version="__PACKAGE_VERSION__"
         ProcessorArchitecture="x64" />
 
     <Properties>
