@@ -11,11 +11,13 @@ from PySide6.QtWidgets import (
 )
 
 from net_speed_meter.core.network_monitor import NetworkMonitor
+from net_speed_meter.services.peak_speed_tracker import PeakSpeedTracker
 from net_speed_meter.services.settings import AppSettings, SettingsManager
 from net_speed_meter.services.speed_formatter import format_speed
 from net_speed_meter.services.usage_repository import UsageRepository
 from net_speed_meter.services.usage_service import UsageService
 from net_speed_meter.ui.settings_window import SettingsWindow
+from net_speed_meter.ui.speed_statistics_window import SpeedStatisticsWindow
 from net_speed_meter.ui.usage_window import UsageWindow
 
 
@@ -36,6 +38,8 @@ class SpeedWidget(QWidget):
         self._usage_service = usage_service
         self._usage_repository = usage_repository
         self._usage_window: UsageWindow | None = None
+        self._speed_statistics_window: SpeedStatisticsWindow | None = None
+        self._peak_speed_tracker = PeakSpeedTracker()
         self._monitor = NetworkMonitor()
         self._drag_position: QPoint | None = None
 
@@ -52,10 +56,7 @@ class SpeedWidget(QWidget):
     def _get_window_flags(self) -> Qt.WindowType:
         """Return window flags based on application settings."""
 
-        flags = (
-            Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.Tool
-        )
+        flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool
 
         if self._settings.always_on_top:
             flags |= Qt.WindowType.WindowStaysOnTopHint
@@ -113,6 +114,7 @@ class SpeedWidget(QWidget):
         self._usage_service.update()
 
         speed = self._monitor.get_current_speed()
+        self._peak_speed_tracker.update(speed)
 
         download = format_speed(
             speed.download_bytes_per_second,
@@ -127,6 +129,9 @@ class SpeedWidget(QWidget):
         if self._usage_window is not None:
             self._usage_window.refresh()
 
+        if self._speed_statistics_window is not None:
+            self._speed_statistics_window.update_speed(speed)
+
     def _show_context_menu(
         self,
         global_position: QPoint,
@@ -135,11 +140,53 @@ class SpeedWidget(QWidget):
 
         menu = QMenu(self)
 
+        menu.setStyleSheet(
+            """
+            QMenu {
+                background-color: #1b1e23;
+                color: #f4f4f5;
+                border: 1px solid #3f444d;
+                border-radius: 8px;
+                padding: 6px;
+            }
+
+            QMenu::item {
+                color: #f4f4f5;
+                padding: 8px 28px 8px 12px;
+                border-radius: 5px;
+            }
+
+            QMenu::item:selected {
+                background-color: #2f3742;
+                color: #ffffff;
+            }
+
+            QMenu::item:disabled {
+                color: #7a808a;
+            }
+
+            QMenu::separator {
+                height: 1px;
+                background: #3f444d;
+                margin: 5px 8px;
+            }
+            """
+        )
+
         usage_action = QAction("Data Usage", self)
         usage_action.triggered.connect(
             self._open_usage_window,
         )
         menu.addAction(usage_action)
+
+        speed_statistics_action = QAction(
+            "Speed Statistics",
+            self,
+        )
+        speed_statistics_action.triggered.connect(
+            self._open_speed_statistics_window,
+        )
+        menu.addAction(speed_statistics_action)
 
         settings_action = QAction("Settings", self)
         settings_action.triggered.connect(
@@ -180,6 +227,22 @@ class SpeedWidget(QWidget):
         self._usage_window.show()
         self._usage_window.raise_()
         self._usage_window.activateWindow()
+
+    def _open_speed_statistics_window(self) -> None:
+        """Open or focus the speed statistics window."""
+
+        if self._speed_statistics_window is None:
+            self._speed_statistics_window = SpeedStatisticsWindow(
+                peak_tracker=self._peak_speed_tracker,
+                parent=self,
+            )
+
+        self._speed_statistics_window.update_speed(
+            self._monitor.get_current_speed(),
+        )
+        self._speed_statistics_window.show()
+        self._speed_statistics_window.raise_()
+        self._speed_statistics_window.activateWindow()
 
     def _open_settings(self) -> None:
         """Open the application settings."""
@@ -236,8 +299,7 @@ class SpeedWidget(QWidget):
 
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_position = (
-                event.globalPosition().toPoint()
-                - self.frameGeometry().topLeft()
+                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             )
 
             event.accept()
@@ -253,8 +315,7 @@ class SpeedWidget(QWidget):
             and self._drag_position is not None
         ):
             self.move(
-                event.globalPosition().toPoint()
-                - self._drag_position,
+                event.globalPosition().toPoint() - self._drag_position,
             )
 
             event.accept()
