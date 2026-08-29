@@ -33,7 +33,7 @@ class SettingsWindow(QDialog):
         self._settings = settings
         self._settings_manager = settings_manager
 
-        self.setWindowTitle("Net Speed Meter Settings")
+        self.setWindowTitle("ProNet Speed Settings")
         self.setMinimumWidth(360)
 
         self._setup_ui()

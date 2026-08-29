@@ -18,7 +18,7 @@ def test_uses_local_app_data_when_available(monkeypatch) -> None:
 def test_uses_home_directory_as_fallback(monkeypatch) -> None:
     monkeypatch.delenv("LOCALAPPDATA", raising=False)
 
-    expected = Path.home() / ".net-speed-meter"
+    expected = Path.home() / ".pro-net-speed"
 
     assert get_app_data_directory() == expected
 

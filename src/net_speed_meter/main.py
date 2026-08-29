@@ -15,7 +15,7 @@ from net_speed_meter.ui.widget import SpeedWidget
 
 
 def main() -> None:
-    """Start the Net Speed Meter application."""
+    """Start the ProNet Speed application."""
 
     app = QApplication(sys.argv)
 

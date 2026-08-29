@@ -39,7 +39,7 @@ class SpeedWidget(QWidget):
         self._monitor = NetworkMonitor()
         self._drag_position: QPoint | None = None
 
-        self.setWindowTitle("Net Speed Meter")
+        self.setWindowTitle("ProNet Speed")
         self.setWindowFlags(self._get_window_flags())
         self.setFixedSize(140, 52)
 

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "net-speed-meter"
+name = "pro-net-speed"
 version = "0.1.0"
 description = "A lightweight, real-time internet speed monitor for Windows."
 readme = "README.md"
@@ -41,7 +41,7 @@ dev = [
 ]
 
 [project.scripts]
-net-speed-meter = "net_speed_meter.main:main"
+pro-net-speed = "net_speed_meter.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/net_speed_meter"]

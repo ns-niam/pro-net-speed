@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-APP_NAME = "Net Speed Meter"
+APP_NAME = "ProNet Speed"
 
 
 def get_app_data_directory() -> Path:
@@ -14,7 +14,7 @@ def get_app_data_directory() -> Path:
     if local_app_data:
         return Path(local_app_data) / APP_NAME
 
-    return Path.home() / ".net-speed-meter"
+    return Path.home() / ".pro-net-speed"
 
 
 def get_settings_path() -> Path:

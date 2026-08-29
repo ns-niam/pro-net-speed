@@ -1,3 +1,3 @@
-# net-speed-meter
+# pro-net-speed
 A lightweight, real-time internet speed monitor for Windows.
 python -m ruff check . --fix

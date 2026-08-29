@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build Microsoft Store Package
 
 on:
   workflow_dispatch:
@@ -6,9 +6,18 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   build-windows:
     runs-on: windows-latest
+
+    env:
+      APP_NAME: ProNetSpeed
+      APP_VERSION: 0.1.0.0
+      PACKAGE_IDENTITY_NAME: ${{ vars.PACKAGE_IDENTITY_NAME }}
+      PACKAGE_PUBLISHER: ${{ vars.PACKAGE_PUBLISHER }}
 
     steps:
       - name: Checkout repository
@@ -18,19 +27,186 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
 
       - name: Install dependencies
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
-          pip install pyinstaller
+          python -m pip install -e ".[dev]"
+          python -m pip install "pyinstaller>=6,<7"
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          python -m pytest -v
+          python -m ruff check .
 
       - name: Build application
+        shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --windowed --name NetSpeedMeter --paths src --collect-all PySide6 src/net_speed_meter/main.py
+          python -m PyInstaller `
+            --noconfirm `
+            --clean `
+            --windowed `
+            --onedir `
+            --noupx `
+            --name $env:APP_NAME `
+            --paths src `
+            src/net_speed_meter/main.py
 
-      - name: Upload Windows EXE
+      - name: Verify application build
+        shell: pwsh
+        run: |
+          $exe = "dist\$env:APP_NAME\$env:APP_NAME.exe"
+
+          if (-not (Test-Path $exe)) {
+            throw "Application executable was not created."
+          }
+
+          Write-Host "Application build verified:"
+          Get-Item $exe
+
+      - name: Locate MakeAppx
+        shell: pwsh
+        run: |
+          $makeAppx = Get-ChildItem `
+            "C:\Program Files (x86)\Windows Kits\10\bin" `
+            -Recurse `
+            -Filter MakeAppx.exe |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+          if ($null -eq $makeAppx) {
+            throw "MakeAppx.exe was not found."
+          }
+
+          "MAKEAPPX_PATH=$($makeAppx.FullName)" |
+            Out-File `
+              -FilePath $env:GITHUB_ENV `
+              -Append
+
+      - name: Validate Store identity configuration
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace(
+            $env:PACKAGE_IDENTITY_NAME
+          )) {
+            throw "PACKAGE_IDENTITY_NAME GitHub variable is missing."
+          }
+
+          if ([string]::IsNullOrWhiteSpace(
+            $env:PACKAGE_PUBLISHER
+          )) {
+            throw "PACKAGE_PUBLISHER GitHub variable is missing."
+          }
+
+      - name: Prepare MSIX staging directory
+        shell: pwsh
+        run: |
+          $stage = "build\msix"
+
+          Remove-Item $stage `
+            -Recurse `
+            -Force `
+            -ErrorAction SilentlyContinue
+
+          New-Item `
+            -ItemType Directory `
+            -Path $stage `
+            -Force | Out-Null
+
+          Copy-Item `
+            "dist\$env:APP_NAME\*" `
+            $stage `
+            -Recurse `
+            -Force
+
+          New-Item `
+            -ItemType Directory `
+            -Path "$stage\assets" `
+            -Force | Out-Null
+
+          Copy-Item `
+            "packaging\assets\*" `
+            "$stage\assets" `
+            -Force
+
+          $manifest = Get-Content `
+            "packaging\AppxManifest.xml" `
+            -Raw
+
+          $manifest = $manifest.Replace(
+            "__PACKAGE_IDENTITY_NAME__",
+            $env:PACKAGE_IDENTITY_NAME
+          )
+
+          $manifest = $manifest.Replace(
+            "__PACKAGE_PUBLISHER__",
+            $env:PACKAGE_PUBLISHER
+          )
+
+          $manifest = $manifest.Replace(
+            "__PACKAGE_VERSION__",
+            $env:APP_VERSION
+          )
+
+          Set-Content `
+            -Path "$stage\AppxManifest.xml" `
+            -Value $manifest `
+            -Encoding utf8
+
+      - name: Verify MSIX package files
+        shell: pwsh
+        run: |
+          $requiredFiles = @(
+            "build\msix\AppxManifest.xml",
+            "build\msix\ProNetSpeed.exe",
+            "build\msix\assets\Square44x44Logo.png",
+            "build\msix\assets\Square150x150Logo.png",
+            "build\msix\assets\StoreLogo.png",
+            "build\msix\assets\Wide310x150Logo.png"
+          )
+
+          foreach ($file in $requiredFiles) {
+            if (-not (Test-Path $file)) {
+              throw "Required package file is missing: $file"
+            }
+          }
+
+      - name: Create MSIX package
+        shell: pwsh
+        run: |
+          New-Item `
+            -ItemType Directory `
+            -Path "dist\store" `
+            -Force | Out-Null
+
+          & $env:MAKEAPPX_PATH pack `
+            /d "build\msix" `
+            /p "dist\store\ProNetSpeed.msix" `
+            /o
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "MSIX packaging failed."
+          }
+
+      - name: Verify MSIX package
+        shell: pwsh
+        run: |
+          $package = "dist\store\ProNetSpeed.msix"
+
+          if (-not (Test-Path $package)) {
+            throw "MSIX package was not created."
+          }
+
+          Write-Host "MSIX package created successfully:"
+          Get-Item $package
+
+      - name: Upload Microsoft Store package
         uses: actions/upload-artifact@v4
         with:
-          name: NetSpeedMeter-Windows
-          path: dist/NetSpeedMeter/
+          name: ProNetSpeed-MSIX
+          path: dist/store/ProNetSpeed.msix
+          if-no-files-found: error
+          retention-days: 30
