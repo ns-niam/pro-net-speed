@@ -40,9 +40,7 @@ class SettingsManager:
                 y=int(data.get("y", 100)),
                 opacity=float(data.get("opacity", 0.9)),
                 always_on_top=bool(data.get("always_on_top", True)),
-                update_interval_ms=int(
-                    data.get("update_interval_ms", 1_000)
-                ),
+                update_interval_ms=int(data.get("update_interval_ms", 1_000)),
             )
         except (
             OSError,

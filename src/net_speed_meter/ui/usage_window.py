@@ -118,13 +118,11 @@ class UsageWindow(QDialog):
         )
 
         self._download_label.setText(
-            "Download: "
-            f"{format_data_size(monthly_usage.download_bytes)}",
+            f"Download: {format_data_size(monthly_usage.download_bytes)}",
         )
 
         self._upload_label.setText(
-            "Upload: "
-            f"{format_data_size(monthly_usage.upload_bytes)}",
+            f"Upload: {format_data_size(monthly_usage.upload_bytes)}",
         )
 
         self._populate_table(history)

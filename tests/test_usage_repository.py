@@ -8,13 +8,9 @@ from net_speed_meter.services.usage_repository import (
 def test_returns_zero_for_missing_daily_usage(
     tmp_path: Path,
 ) -> None:
-    repository = UsageRepository(
-        tmp_path / "usage.db"
-    )
+    repository = UsageRepository(tmp_path / "usage.db")
 
-    usage = repository.get_daily_usage(
-        "2026-08-29"
-    )
+    usage = repository.get_daily_usage("2026-08-29")
 
     assert usage.download_bytes == 0
     assert usage.upload_bytes == 0
@@ -24,9 +20,7 @@ def test_returns_zero_for_missing_daily_usage(
 def test_adds_and_retrieves_daily_usage(
     tmp_path: Path,
 ) -> None:
-    repository = UsageRepository(
-        tmp_path / "usage.db"
-    )
+    repository = UsageRepository(tmp_path / "usage.db")
 
     repository.add_usage(
         date="2026-08-29",
@@ -34,9 +28,7 @@ def test_adds_and_retrieves_daily_usage(
         upload_bytes=500,
     )
 
-    usage = repository.get_daily_usage(
-        "2026-08-29"
-    )
+    usage = repository.get_daily_usage("2026-08-29")
 
     assert usage.download_bytes == 1_000
     assert usage.upload_bytes == 500
@@ -46,9 +38,7 @@ def test_adds_and_retrieves_daily_usage(
 def test_accumulates_usage_for_same_day(
     tmp_path: Path,
 ) -> None:
-    repository = UsageRepository(
-        tmp_path / "usage.db"
-    )
+    repository = UsageRepository(tmp_path / "usage.db")
 
     repository.add_usage(
         date="2026-08-29",
@@ -62,9 +52,7 @@ def test_accumulates_usage_for_same_day(
         upload_bytes=300,
     )
 
-    usage = repository.get_daily_usage(
-        "2026-08-29"
-    )
+    usage = repository.get_daily_usage("2026-08-29")
 
     assert usage.download_bytes == 3_000
     assert usage.upload_bytes == 800
@@ -73,9 +61,7 @@ def test_accumulates_usage_for_same_day(
 def test_negative_usage_is_stored_as_zero(
     tmp_path: Path,
 ) -> None:
-    repository = UsageRepository(
-        tmp_path / "usage.db"
-    )
+    repository = UsageRepository(tmp_path / "usage.db")
 
     repository.add_usage(
         date="2026-08-29",
@@ -83,9 +69,7 @@ def test_negative_usage_is_stored_as_zero(
         upload_bytes=-200,
     )
 
-    usage = repository.get_daily_usage(
-        "2026-08-29"
-    )
+    usage = repository.get_daily_usage("2026-08-29")
 
     assert usage.download_bytes == 0
     assert usage.upload_bytes == 0
@@ -94,9 +78,7 @@ def test_negative_usage_is_stored_as_zero(
 def test_calculates_monthly_usage(
     tmp_path: Path,
 ) -> None:
-    repository = UsageRepository(
-        tmp_path / "usage.db"
-    )
+    repository = UsageRepository(tmp_path / "usage.db")
 
     repository.add_usage(
         date="2026-08-28",
@@ -129,9 +111,7 @@ def test_calculates_monthly_usage(
 def test_returns_monthly_history_in_descending_order(
     tmp_path: Path,
 ) -> None:
-    repository = UsageRepository(
-        tmp_path / "usage.db"
-    )
+    repository = UsageRepository(tmp_path / "usage.db")
 
     repository.add_usage(
         date="2026-08-27",

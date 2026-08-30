@@ -24,9 +24,7 @@ def test_formats_megabytes() -> None:
 
 
 def test_formats_gigabytes() -> None:
-    assert format_data_size(
-        1024 * 1024 * 1024
-    ) == "1.00 GB"
+    assert format_data_size(1024 * 1024 * 1024) == "1.00 GB"
 
 
 def test_formats_fractional_megabytes() -> None:

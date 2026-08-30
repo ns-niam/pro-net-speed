@@ -28,10 +28,6 @@ def test_settings_path_is_inside_app_data_directory(
 ) -> None:
     monkeypatch.setenv("LOCALAPPDATA", "/tmp/local-app-data")
 
-    expected = (
-        Path("/tmp/local-app-data")
-        / APP_NAME
-        / "settings.json"
-    )
+    expected = Path("/tmp/local-app-data") / APP_NAME / "settings.json"
 
     assert get_settings_path() == expected
