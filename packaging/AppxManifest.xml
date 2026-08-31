@@ -8,9 +8,9 @@
     IgnorableNamespaces="uap desktop rescap">
 
     <Identity
-        Name="BrightForge.ProNetSpeed"
-        Publisher="CN=1E70EB40-BAE3-4BC8-9994-5904955D6846"
-        Version="1.0.0.0"
+        Name="__PACKAGE_IDENTITY_NAME__"
+        Publisher="__PACKAGE_PUBLISHER__"
+        Version="__PACKAGE_VERSION__"
         ProcessorArchitecture="x64" />
 
     <Properties>
@@ -48,12 +48,6 @@
                     Square310x310Logo="Assets\Square310x310Logo.png" />
 
             </uap:VisualElements>
-
-            <Extensions>
-                <desktop:Extension
-                    Category="windows.fullTrustProcess"
-                    Executable="ProNetSpeed.exe" />
-            </Extensions>
 
         </Application>
     </Applications>
