@@ -20,15 +20,24 @@ jobs:
       PACKAGE_PUBLISHER: ${{ vars.PACKAGE_PUBLISHER }}
 
     steps:
+      # ------------------------------------------------------------
+      # Checkout
+      # ------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ------------------------------------------------------------
+      # Python
+      # ------------------------------------------------------------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
 
+      # ------------------------------------------------------------
+      # Dependencies
+      # ------------------------------------------------------------
       - name: Install dependencies
         shell: pwsh
         run: |
@@ -36,12 +45,18 @@ jobs:
           python -m pip install -e ".[dev]"
           python -m pip install "pyinstaller>=6,<7"
 
+      # ------------------------------------------------------------
+      # Tests + lint
+      # ------------------------------------------------------------
       - name: Run tests and lint
         shell: pwsh
         run: |
           python -m pytest -v
           python -m ruff check .
 
+      # ------------------------------------------------------------
+      # Build Windows application
+      # ------------------------------------------------------------
       - name: Build application
         shell: pwsh
         run: |
@@ -55,6 +70,9 @@ jobs:
             --paths src `
             src/net_speed_meter/main.py
 
+      # ------------------------------------------------------------
+      # Verify EXE
+      # ------------------------------------------------------------
       - name: Verify application build
         shell: pwsh
         run: |
@@ -67,6 +85,47 @@ jobs:
           Write-Host "Application build verified:"
           Get-Item $exe
 
+      # ------------------------------------------------------------
+      # Startup test
+      # ------------------------------------------------------------
+      - name: Test application startup
+        shell: pwsh
+        run: |
+          $exe = "dist\$env:APP_NAME\$env:APP_NAME.exe"
+
+          Write-Host "Starting application..."
+
+          $process = Start-Process `
+            -FilePath $exe `
+            -PassThru
+
+          Start-Sleep -Seconds 5
+
+          if ($process.HasExited) {
+            throw "Application exited unexpectedly with exit code: $($process.ExitCode)"
+          }
+
+          Write-Host "Application started successfully."
+
+          Stop-Process `
+            -Id $process.Id `
+            -Force `
+            -ErrorAction SilentlyContinue
+
+      # ------------------------------------------------------------
+      # Upload Windows build for manual laptop testing
+      # ------------------------------------------------------------
+      - name: Upload Windows application for testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProNetSpeed-Windows-Test
+          path: dist/ProNetSpeed
+          if-no-files-found: error
+          retention-days: 7
+
+      # ------------------------------------------------------------
+      # Locate MakeAppx
+      # ------------------------------------------------------------
       - name: Locate MakeAppx
         shell: pwsh
         run: |
@@ -89,6 +148,34 @@ jobs:
           Write-Host "Using MakeAppx:"
           Write-Host $makeAppx.FullName
 
+      # ------------------------------------------------------------
+      # Locate SignTool
+      # ------------------------------------------------------------
+      - name: Locate SignTool
+        shell: pwsh
+        run: |
+          $signTool = Get-ChildItem `
+            "C:\Program Files (x86)\Windows Kits\10\bin" `
+            -Recurse `
+            -Filter signtool.exe |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+          if ($null -eq $signTool) {
+            throw "SignTool.exe was not found."
+          }
+
+          "SIGNTOOL_PATH=$($signTool.FullName)" |
+            Out-File `
+              -FilePath $env:GITHUB_ENV `
+              -Append
+
+          Write-Host "Using SignTool:"
+          Write-Host $signTool.FullName
+
+      # ------------------------------------------------------------
+      # Validate Microsoft Store identity
+      # ------------------------------------------------------------
       - name: Validate Store identity configuration
         shell: pwsh
         run: |
@@ -105,7 +192,12 @@ jobs:
           }
 
           Write-Host "Store identity configuration is available."
+          Write-Host "Package identity: $env:PACKAGE_IDENTITY_NAME"
+          Write-Host "Package publisher: $env:PACKAGE_PUBLISHER"
 
+      # ------------------------------------------------------------
+      # Prepare MSIX staging directory
+      # ------------------------------------------------------------
       - name: Prepare MSIX staging directory
         shell: pwsh
         run: |
@@ -172,6 +264,9 @@ jobs:
 
           Write-Host "MSIX manifest created successfully."
 
+      # ------------------------------------------------------------
+      # Verify generated manifest
+      # ------------------------------------------------------------
       - name: Verify generated MSIX manifest
         shell: pwsh
         run: |
@@ -198,6 +293,9 @@ jobs:
             -Path $manifestPath `
             -Pattern "<Identity"
 
+      # ------------------------------------------------------------
+      # Verify files going into MSIX
+      # ------------------------------------------------------------
       - name: Verify MSIX package files
         shell: pwsh
         run: |
@@ -221,6 +319,9 @@ jobs:
 
           Write-Host "All required MSIX package files are present."
 
+      # ------------------------------------------------------------
+      # Create MSIX
+      # ------------------------------------------------------------
       - name: Create MSIX package
         shell: pwsh
         run: |
@@ -238,29 +339,198 @@ jobs:
             throw "MSIX packaging failed."
           }
 
-      - name: Verify MSIX package
+          Write-Host "MSIX package created."
+
+      # ------------------------------------------------------------
+      # Preserve unsigned package for Microsoft Store
+      # ------------------------------------------------------------
+      - name: Preserve Store package
         shell: pwsh
         run: |
-          $package = "dist\store\ProNetSpeed.msix"
+          Copy-Item `
+            "dist\store\ProNetSpeed.msix" `
+            "dist\store\ProNetSpeed-Store.msix" `
+            -Force
 
-          if (-not (Test-Path $package)) {
-            throw "MSIX package was not created."
+          Write-Host "Store package preserved."
+
+      # ------------------------------------------------------------
+      # Create certificate for LOCAL testing only
+      # ------------------------------------------------------------
+      - name: Create local test certificate
+        shell: pwsh
+        run: |
+          $cert = New-SelfSignedCertificate `
+            -Type CodeSigningCert `
+            -Subject $env:PACKAGE_PUBLISHER `
+            -FriendlyName "ProNet Speed Local Test Certificate" `
+            -KeyAlgorithm RSA `
+            -KeyLength 2048 `
+            -HashAlgorithm SHA256 `
+            -CertStoreLocation "Cert:\CurrentUser\My"
+
+          if ($null -eq $cert) {
+            throw "Failed to create local test certificate."
           }
 
-          $packageInfo = Get-Item $package
+          Write-Host "Certificate created."
+          Write-Host "Subject: $($cert.Subject)"
+          Write-Host "Thumbprint: $($cert.Thumbprint)"
 
-          if ($packageInfo.Length -le 0) {
-            throw "MSIX package is empty."
+          $password = ConvertTo-SecureString `
+            "${{ secrets.TEST_CERT_PASSWORD }}" `
+            -AsPlainText `
+            -Force
+
+          New-Item `
+            -ItemType Directory `
+            -Path "build\certificate" `
+            -Force | Out-Null
+
+          Export-PfxCertificate `
+            -Cert $cert `
+            -FilePath "build\certificate\ProNetSpeed-TestCertificate.pfx" `
+            -Password $password | Out-Null
+
+          Export-Certificate `
+            -Cert $cert `
+            -FilePath "build\certificate\ProNetSpeed-TestCertificate.cer" |
+            Out-Null
+
+          "TEST_CERT_THUMBPRINT=$($cert.Thumbprint)" |
+            Out-File `
+              -FilePath $env:GITHUB_ENV `
+              -Append
+
+      # ------------------------------------------------------------
+      # Trust local test certificate on GitHub runner
+      # ------------------------------------------------------------
+      - name: Trust local test certificate
+        shell: pwsh
+        run: |
+          $cert = Get-ChildItem `
+            "Cert:\CurrentUser\My\$env:TEST_CERT_THUMBPRINT"
+
+          if ($null -eq $cert) {
+            throw "Test certificate could not be found."
           }
 
-          Write-Host "MSIX package created successfully:"
-          Write-Host "Path: $($packageInfo.FullName)"
-          Write-Host "Size: $([math]::Round($packageInfo.Length / 1MB, 2)) MB"
+          $store = New-Object `
+            System.Security.Cryptography.X509Certificates.X509Store(
+              "TrustedPeople",
+              "CurrentUser"
+            )
 
+          $store.Open("ReadWrite")
+          $store.Add($cert)
+          $store.Close()
+
+          Write-Host "Local test certificate added to TrustedPeople."
+
+      # ------------------------------------------------------------
+      # Create LOCAL TEST signed copy
+      # ------------------------------------------------------------
+      - name: Prepare local test MSIX
+        shell: pwsh
+        run: |
+          Copy-Item `
+            "dist\store\ProNetSpeed.msix" `
+            "dist\store\ProNetSpeed-LocalTest.msix" `
+            -Force
+
+          Write-Host "Local test MSIX copy created."
+
+      # ------------------------------------------------------------
+      # Sign LOCAL TEST MSIX
+      # ------------------------------------------------------------
+      - name: Sign local test MSIX
+        shell: pwsh
+        run: |
+          & $env:SIGNTOOL_PATH sign `
+            /fd SHA256 `
+            /f "build\certificate\ProNetSpeed-TestCertificate.pfx" `
+            /p "${{ secrets.TEST_CERT_PASSWORD }}" `
+            "dist\store\ProNetSpeed-LocalTest.msix"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Local test MSIX signing failed."
+          }
+
+          Write-Host "Local test MSIX signed successfully."
+
+      # ------------------------------------------------------------
+      # Verify LOCAL TEST signature
+      # ------------------------------------------------------------
+      - name: Verify local test MSIX signature
+        shell: pwsh
+        run: |
+          & $env:SIGNTOOL_PATH verify `
+            /pa `
+            /all `
+            "dist\store\ProNetSpeed-LocalTest.msix"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Local test MSIX signature verification failed."
+          }
+
+          Write-Host "Local test MSIX signature verified successfully."
+
+      # ------------------------------------------------------------
+      # Verify package files
+      # ------------------------------------------------------------
+      - name: Verify final packages
+        shell: pwsh
+        run: |
+          $packages = @(
+            "dist\store\ProNetSpeed-Store.msix",
+            "dist\store\ProNetSpeed-LocalTest.msix"
+          )
+
+          foreach ($package in $packages) {
+            if (-not (Test-Path $package)) {
+              throw "Package was not created: $package"
+            }
+
+            $info = Get-Item $package
+
+            if ($info.Length -le 0) {
+              throw "Package is empty: $package"
+            }
+
+            Write-Host "Package:"
+            Write-Host "  Path: $($info.FullName)"
+            Write-Host "  Size: $([math]::Round($info.Length / 1MB, 2)) MB"
+          }
+
+      # ------------------------------------------------------------
+      # Upload Microsoft Store package
+      # ------------------------------------------------------------
       - name: Upload Microsoft Store package
         uses: actions/upload-artifact@v4
         with:
           name: ProNetSpeed-MSIX
-          path: dist/store/ProNetSpeed.msix
+          path: dist/store/ProNetSpeed-Store.msix
           if-no-files-found: error
           retention-days: 30
+
+      # ------------------------------------------------------------
+      # Upload LOCAL TEST package
+      # ------------------------------------------------------------
+      - name: Upload local test MSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProNetSpeed-LocalTest-MSIX
+          path: dist/store/ProNetSpeed-LocalTest.msix
+          if-no-files-found: error
+          retention-days: 7
+
+      # ------------------------------------------------------------
+      # Upload LOCAL TEST certificate
+      # ------------------------------------------------------------
+      - name: Upload local test certificate
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProNetSpeed-TestCertificate
+          path: build/certificate/ProNetSpeed-TestCertificate.cer
+          if-no-files-found: error
+          retention-days: 7
