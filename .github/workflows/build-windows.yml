@@ -67,6 +67,30 @@ jobs:
           Write-Host "Application build verified:"
           Get-Item $exe
 
+      - name: Test application startup
+        shell: pwsh
+        run: |
+          $exe = "dist\$env:APP_NAME\$env:APP_NAME.exe"
+
+          Write-Host "Starting application..."
+
+          $process = Start-Process `
+            -FilePath $exe `
+            -PassThru
+
+          Start-Sleep -Seconds 5
+
+          if ($process.HasExited) {
+            throw "Application exited unexpectedly with exit code: $($process.ExitCode)"
+          }
+
+          Write-Host "Application started successfully."
+
+          Stop-Process `
+            -Id $process.Id `
+            -Force `
+            -ErrorAction SilentlyContinue
+
       - name: Locate MakeAppx
         shell: pwsh
         run: |
