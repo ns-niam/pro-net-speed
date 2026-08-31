@@ -8,9 +8,9 @@
     IgnorableNamespaces="uap desktop rescap">
 
     <Identity
-        Name="__PACKAGE_IDENTITY_NAME__"
-        Publisher="__PACKAGE_PUBLISHER__"
-        Version="__PACKAGE_VERSION__"
+        Name="BrightForge.ProNetSpeed"
+        Publisher="CN=1E70EB40-BAE3-4BC8-9994-5904955D6846"
+        Version="1.0.0.0"
         ProcessorArchitecture="x64" />
 
     <Properties>
