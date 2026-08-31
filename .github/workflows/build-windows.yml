@@ -91,6 +91,14 @@ jobs:
             -Force `
             -ErrorAction SilentlyContinue
 
+      - name: Upload Windows application for testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProNetSpeed-Windows-Test
+          path: dist/ProNetSpeed
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Locate MakeAppx
         shell: pwsh
         run: |
@@ -112,6 +120,28 @@ jobs:
 
           Write-Host "Using MakeAppx:"
           Write-Host $makeAppx.FullName
+
+      - name: Locate SignTool
+        shell: pwsh
+        run: |
+          $signTool = Get-ChildItem `
+            "C:\Program Files (x86)\Windows Kits\10\bin" `
+            -Recurse `
+            -Filter signtool.exe |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+          if ($null -eq $signTool) {
+            throw "SignTool.exe was not found."
+          }
+
+          "SIGNTOOL_PATH=$($signTool.FullName)" |
+            Out-File `
+              -FilePath $env:GITHUB_ENV `
+              -Append
+
+          Write-Host "Using SignTool:"
+          Write-Host $signTool.FullName
 
       - name: Validate Store identity configuration
         shell: pwsh
@@ -262,6 +292,64 @@ jobs:
             throw "MSIX packaging failed."
           }
 
+      - name: Create local test certificate
+        shell: pwsh
+        run: |
+          $cert = New-SelfSignedCertificate `
+            -Type CodeSigningCert `
+            -Subject $env:PACKAGE_PUBLISHER `
+            -FriendlyName "ProNet Speed Local Test Certificate" `
+            -CertStoreLocation "Cert:\CurrentUser\My"
+
+          if ($null -eq $cert) {
+            throw "Test certificate creation failed."
+          }
+
+          $password = ConvertTo-SecureString `
+            "${{ secrets.TEST_CERT_PASSWORD }}" `
+            -AsPlainText `
+            -Force
+
+          Export-PfxCertificate `
+            -Cert $cert `
+            -FilePath "build\ProNetSpeed-TestCertificate.pfx" `
+            -Password $password | Out-Null
+
+          Export-Certificate `
+            -Cert $cert `
+            -FilePath "build\ProNetSpeed-TestCertificate.cer" | Out-Null
+
+          Write-Host "Local test certificate created successfully."
+
+      - name: Sign MSIX for local testing
+        shell: pwsh
+        run: |
+          & $env:SIGNTOOL_PATH sign `
+            /fd SHA256 `
+            /f "build\ProNetSpeed-TestCertificate.pfx" `
+            /p "${{ secrets.TEST_CERT_PASSWORD }}" `
+            "dist\store\ProNetSpeed.msix"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "MSIX signing failed."
+          }
+
+          Write-Host "MSIX signed successfully for local testing."
+
+      - name: Verify MSIX signature
+        shell: pwsh
+        run: |
+          & $env:SIGNTOOL_PATH verify `
+            /pa `
+            /all `
+            "dist\store\ProNetSpeed.msix"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "MSIX signature verification failed."
+          }
+
+          Write-Host "MSIX signature verified successfully."
+
       - name: Verify MSIX package
         shell: pwsh
         run: |
@@ -288,3 +376,11 @@ jobs:
           path: dist/store/ProNetSpeed.msix
           if-no-files-found: error
           retention-days: 30
+
+      - name: Upload local test certificate
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProNetSpeed-TestCertificate
+          path: build/ProNetSpeed-TestCertificate.cer
+          if-no-files-found: error
+          retention-days: 7
