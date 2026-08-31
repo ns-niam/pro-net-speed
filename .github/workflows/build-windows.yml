@@ -54,6 +54,27 @@ jobs:
             --name $env:APP_NAME `
             --paths src `
             src/net_speed_meter/main.py
+      
+      - name: Build Windows debug application
+        shell: pwsh
+        run: |
+          python -m PyInstaller `
+            --noconfirm `
+            --clean `
+            --onedir `
+            --console `
+            --name ProNetSpeed-Debug `
+            --paths src `
+            src/net_speed_meter/main.py
+
+          $exe = "dist\ProNetSpeed-Debug\ProNetSpeed-Debug.exe"
+
+          if (-not (Test-Path $exe)) {
+            throw "Debug executable was not created: $exe"
+          }
+
+          Write-Host "Debug executable created:"
+          Write-Host $exe      
 
       - name: Verify application build
         shell: pwsh
@@ -264,3 +285,11 @@ jobs:
           path: dist/store/ProNetSpeed.msix
           if-no-files-found: error
           retention-days: 30
+
+      - name: Upload Windows debug build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProNetSpeed-Windows-Debug
+          path: dist/ProNetSpeed-Debug
+          if-no-files-found: error
+          retention-days: 7    
