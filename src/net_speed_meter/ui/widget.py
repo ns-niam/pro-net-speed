@@ -111,9 +111,32 @@ class SpeedWidget(QWidget):
     def _update_speed(self) -> None:
         """Update the displayed network speed."""
 
-        self._usage_service.update()
+        try:
+            self._usage_service.update()
 
-        speed = self._monitor.get_current_speed()
+            speed = self._monitor.get_current_speed()
+            self._peak_speed_tracker.update(speed)
+
+            download = format_speed(
+                  speed.download_bytes_per_second,
+        )
+            upload = format_speed(
+                speed.upload_bytes_per_second,
+        )
+
+            self.download_label.setText(f"↓ {download}")
+            self.upload_label.setText(f"↑ {upload}")
+
+            if self._usage_window is not None:
+               self._usage_window.refresh()
+
+            if self._speed_statistics_window is not None:
+               self._speed_statistics_window.update_speed(speed)
+
+        except Exception:
+           import logging
+
+           logging.exception("Network speed update failed")
         self._peak_speed_tracker.update(speed)
 
         download = format_speed(
